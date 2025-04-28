@@ -1,0 +1,7 @@
+[package]
+name = "ascii4"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sysx = { git = "https://github.com/lyric228/sysx.git" }
