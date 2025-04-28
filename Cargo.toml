@@ -5,3 +5,10 @@ edition = "2024"
 
 [dependencies]
 sysx = { git = "https://github.com/lyric228/sysx.git" }
+clap = { version = "4.5.37", features = ["derive"] }
+ffmpeg-next = "7.1.0"
+image = "0.25.6"
+anyhow = "1.0.98"
+
+[build-dependencies]
+ffmpeg-next = "7.1.0"
