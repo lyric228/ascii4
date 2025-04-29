@@ -1,4 +1,6 @@
 /target
 /output
 Cargo.lock
+ascii4
 *.mp4
+*.mp3
