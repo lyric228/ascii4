@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand}; // Добавили Subcommand
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -11,32 +11,101 @@ use std::{
 };
 use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_DETAILED};
 
-const EAGAIN: i32 = 11;
+// --- Объявляем модуль player ---
+mod player;
+// ---
 
+const EAGAIN: i32 = 11; // Или используем libc::EAGAIN, если libc добавлен как зависимость
+
+// --- Основная структура CLI с подкомандами ---
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
+#[command(author, version, about = "Convert videos to ASCII art and play them", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+// --- Перечисление возможных подкоманд ---
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Convert a video file into ASCII frames organized by second
+    Convert(ConvertArgs),
+    /// Play an ASCII animation from a directory of frames
+    Play(PlayArgs),
+}
+
+// --- Аргументы для команды convert ---
+#[derive(Parser, Debug)]
+struct ConvertArgs {
+    /// Path to the input video file
     #[arg(short, long)]
     input: String,
 
+    /// Output directory for ASCII frames (will contain subdirs for seconds)
     #[arg(short, long, default_value = "output")]
     output_dir: String,
 
-    #[arg(short, long, default_value_t = 30.0)]
+    /// Target frames per second for ASCII conversion (sampling rate)
+    #[arg(short, long, default_value_t = 15.0)] // Увеличил дефолтное значение для конвертации
     fps: f64,
 
-    // Keep these as usize for clap parsing flexibility
+    /// Width of the output ASCII art
     #[arg(short = 'W', long, default_value_t = 100)]
     width: usize,
 
+    /// Height of the output ASCII art (maximum)
     #[arg(short = 'H', long, default_value_t = 50)]
     height: usize,
 }
 
+// --- Аргументы для команды play ---
+#[derive(Parser, Debug)]
+struct PlayArgs {
+    /// Directory containing the ASCII frames (organized by second subdirs)
+    #[arg(short, long, default_value = "output")]
+    frames_dir: PathBuf, // Используем PathBuf для clap
+
+    /// Frames per second for playback
+    #[arg(short, long, default_value_t = 30.0)] // Дефолтное значение для воспроизведения
+    fps: f64,
+
+    /// Optional path to an audio file (e.g., mp3, wav) to play alongside the animation
+    #[arg(short, long)]
+    audio: Option<PathBuf>, // Используем PathBuf для clap
+}
+
+
+// --- Основная функция ---
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
     let start_time = Instant::now();
 
+    // --- Диспетчеризация команд ---
+    match cli.command {
+        Commands::Convert(args) => {
+            println!("Running conversion...");
+            run_conversion(args)?;
+        }
+        Commands::Play(args) => {
+            println!("Running player...");
+            // --- Создаем опции для плеера ---
+            let player_options = player::PlayerOptions {
+                frames_dir: args.frames_dir,
+                fps: args.fps,
+                audio_path: args.audio,
+            };
+            player::play_animation(player_options)?;
+        }
+    }
+
+    let duration = start_time.elapsed();
+    println!("\nCommand finished in: {:.2?}", duration);
+
+    Ok(())
+}
+
+// --- Логика конвертации вынесена в отдельную функцию ---
+fn run_conversion(args: ConvertArgs) -> Result<()> {
     ffmpeg::init().context("Failed to initialize FFmpeg")?;
 
     let input_path = Path::new(&args.input);
@@ -71,44 +140,35 @@ fn main() -> Result<()> {
          return Err(anyhow!("Invalid video time base (denominator is zero)"));
     }
 
-    // --- Using unsafe pointer access as requested ---
-    // WARNING: This bypasses Rust safety guarantees.
     let (input_width, input_height) = unsafe {
         let params_ptr = codec_parameters.as_ptr();
-        // Check for null pointer before dereferencing
         if params_ptr.is_null() {
              return Err(anyhow!("Codec parameters pointer is null"));
         }
-        // Read width and height from the raw pointer
         ((*params_ptr).width, (*params_ptr).height)
     };
 
     println!(
         "Input video: {}x{} @ {:.2} FPS",
-        input_width, // Use the values read via unsafe
-        input_height, // Use the values read via unsafe
-        original_fps
+        input_width, input_height, original_fps
     );
-    // --- End unsafe block ---
-
-    println!("Target ASCII FPS: {:.2}", args.fps);
-    println!("Main output directory: {}", args.output_dir);
+    println!("Target ASCII FPS for conversion: {:.2}", args.fps); // Уточнили
+    println!("Output directory: {}", args.output_dir);
 
     let context = ffmpeg::codec::context::Context::from_parameters(codec_parameters)
         .context("Failed to create codec context from parameters")?;
     let mut decoder = context.decoder().video()
         .context("Failed to create video decoder from context")?;
 
-    // It's generally safer to use the decoder's reported dimensions after initialization
     let decoder_width = decoder.width();
     let decoder_height = decoder.height();
 
     let mut scaler = ffmpeg::software::scaling::context::Context::get(
         decoder.format(),
-        decoder_width,  // Use decoder's width
-        decoder_height, // Use decoder's height
+        decoder_width,
+        decoder_height,
         ffmpeg::format::Pixel::RGB24,
-        decoder_width,  // Target dimensions for scaler
+        decoder_width,
         decoder_height,
         ffmpeg::software::scaling::flag::Flags::BILINEAR,
     )
@@ -126,50 +186,37 @@ fn main() -> Result<()> {
     } else {
         1
     }.max(1);
-    println!("Minimum PTS difference for target FPS: {}", min_pts_difference);
+    println!("Minimum PTS difference for conversion sampling: {}", min_pts_difference); // Уточнили
 
-
-    // --- Cast usize to u32 for AsciiArtConfig ---
-    // Add error handling for potential overflow, though unlikely for dimensions
     let ascii_width: u32 = args.width.try_into().context("Width value too large")?;
     let ascii_height: u32 = args.height.try_into().context("Height value too large")?;
 
     let ascii_config = AsciiArtConfig {
-        width: ascii_width, // Use the converted u32 value
-        height: ascii_height, // Use the converted u32 value
+        width: ascii_width,
+        height: ascii_height,
         char_set: CHAR_SET_DETAILED.chars().collect(),
         ..Default::default()
     };
-    // --- End cast ---
 
     let temp_frame_path = main_output_dir_path.join("_temp_frame.png");
 
     'packet_loop: for (stream, packet) in ictx.packets() {
         if stream.index() == video_stream_index {
             if let Err(e) = decoder.send_packet(&packet) {
-                // --- Fix Error::Other check using matches! ---
                  if e == ffmpeg::Error::Eof {
-                    println!("\nDecoder signalled EOF while sending packet."); // More info
+                    println!("\nDecoder signalled EOF while sending packet.");
                     break 'packet_loop;
                  } else if matches!(e, ffmpeg::Error::Other { .. }) {
-                     // EAGAIN or other non-fatal "try again" errors might appear as Error::Other
-                     // Depending on the specific errno, might need different handling.
-                     // For now, just print a warning and continue processing output frames.
                      eprintln!("\nWarning: Non-fatal error sending packet: {}", e);
-                     // The loop below will try to receive frames, potentially clearing the state
                  } else {
-                     // For other errors, return the error
                      return Err(anyhow!("Failed to send packet to decoder: {}", e));
                  }
-                 // --- End Error::Other fix ---
             }
 
             let mut decoded_frame = ffmpeg::frame::Video::empty();
-            // Use loop instead of while to handle potential EAGAIN from receive_frame
             loop {
                  match decoder.receive_frame(&mut decoded_frame) {
                      Ok(()) => {
-                         // --- Frame processing logic (moved inside Ok arm) ---
                          video_frame_count += 1;
                          let current_pts = decoded_frame.pts().unwrap_or(0);
 
@@ -196,14 +243,14 @@ fn main() -> Result<()> {
                                  Some(dir) => dir,
                                  None => {
                                      eprintln!("Error: Current second directory not set for frame {}. Skipping.", video_frame_count);
-                                     continue; // Continue the inner loop (receive_frame)
+                                     continue;
                                  }
                              };
 
                              let mut rgb_frame = ffmpeg::frame::Video::empty();
                              if scaler.run(&decoded_frame, &mut rgb_frame).is_err() {
                                  eprintln!("Warning: Scaler failed for frame {}. Skipping.", video_frame_count);
-                                 continue; // Continue the inner loop
+                                 continue;
                              }
 
                              let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> =
@@ -215,13 +262,13 @@ fn main() -> Result<()> {
                                      Some(buf) => buf,
                                      None => {
                                          eprintln!("Warning: Failed to create image buffer for frame {}. Skipping.", video_frame_count);
-                                         continue; // Continue the inner loop
+                                         continue;
                                      }
                                  };
 
                              if img_buf.save(&temp_frame_path).is_err() {
                                  eprintln!("Warning: Failed to save temporary frame {}. Skipping.", video_frame_count);
-                                 continue; // Continue the inner loop
+                                 continue;
                              }
 
                              match image_to_ascii_configurable(&temp_frame_path, &ascii_config) {
@@ -255,57 +302,44 @@ fn main() -> Result<()> {
                                  }
                              }
                          }
-                         // --- End Frame processing logic ---
                      }
                      Err(ffmpeg::Error::Eof) => {
-                         println!("\nDecoder signalled EOF while receiving frames.");
-                         break; // Exit the inner receive_frame loop
+                         // EOF при получении кадра - это нормально, просто выходим из внутреннего цикла
+                         break;
                      }
                      Err(ffmpeg::Error::Other { errno }) if errno == EAGAIN => {
-                         // Decoder needs more input packets, exit inner loop and get next packet
-                         // println!("\nDecoder needs more input (EAGAIN)."); // Debugging
-                         break; // Exit the inner receive_frame loop
+                         // Нужно больше пакетов
+                         break;
                      }
                      Err(e) => {
-                         // An unexpected error occurred during decoding
                          eprintln!("\nWarning: Error receiving frame: {}", e);
-                         // Decide whether to break or continue; breaking is safer
-                         break; // Exit the inner receive_frame loop
+                         break;
                      }
                  }
-            } // End inner loop (receive_frame)
+            } // End inner loop
         } // End if stream_index
-    } // End packet_loop ('packet_loop)
+    } // End packet_loop
 
-    // --- Cleanup and Final Flush ---
     if temp_frame_path.exists() {
         let _ = fs::remove_file(&temp_frame_path);
     }
 
-    // Send EOF to the decoder *again* here to ensure it's flushed,
-    // even if we broke out of the loop early.
     if let Err(e) = decoder.send_eof() {
-        // Log EOF sending error but don't necessarily stop the program
-        eprintln!("\nWarning: Failed to send EOF to decoder: {}", e);
+        if e != ffmpeg::Error::Eof {
+            eprintln!("\nWarning: Failed to send final EOF to decoder: {}", e);
+        }
     }
 
-    // Drain any remaining frames from the decoder after EOF
     let mut decoded_frame = ffmpeg::frame::Video::empty();
     while decoder.receive_frame(&mut decoded_frame).is_ok() {
-        // Note: We are *not* processing these flushed frames into ASCII here.
-        // If precise handling of the very last frames is critical,
-        // the processing logic (calculating second, saving ASCII) would need
-        // to be duplicated or refactored into a function to be called here too.
-        video_frame_count += 1; // Still count them as scanned
+        video_frame_count += 1;
     }
-    // --- End of Cleanup ---
 
-    let duration = start_time.elapsed();
-    println!("\n\nFinished processing.");
-    println!("Total video frames scanned: {}", video_frame_count);
-    println!("Total ASCII frames generated: {}", total_output_frames); // Use the total count
-    println!("Output saved to subdirectories within: {}", args.output_dir); // Updated message
-    println!("Total time: {:.2?}", duration);
+    // --- Перенес вывод статистики в конец основной функции ---
+    // println!("\n\nFinished conversion.");
+    // println!("Total video frames scanned: {}", video_frame_count);
+    // println!("Total ASCII frames generated: {}", total_output_frames);
+    // println!("Output saved to subdirectories within: {}", args.output_dir);
 
     Ok(())
-} // End of main function
+} // --- Конец функции run_conversion ---

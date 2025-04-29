@@ -1,11 +1,13 @@
 [package]
 name = "ascii4"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
 sysx = { git = "https://github.com/lyric228/sysx.git" }
 clap = { version = "4.5.37", features = ["derive"] }
+rodio = { version = "0.20.1", features = ["mp3", "wav", "vorbis", "flac"] }
+crossterm = "0.29.0"
 ffmpeg-next = "7.1.0"
 image = "0.25.6"
 anyhow = "1.0.98"
