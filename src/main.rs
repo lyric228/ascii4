@@ -7,10 +7,11 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     time::Instant,
-    // --- Add try_into ---
     convert::TryInto,
 };
 use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_DETAILED};
+
+const EAGAIN: i32 = 11;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -260,7 +261,7 @@ fn main() -> Result<()> {
                          println!("\nDecoder signalled EOF while receiving frames.");
                          break; // Exit the inner receive_frame loop
                      }
-                     Err(ffmpeg::Error::Other { errno }) if errno == 11 => {
+                     Err(ffmpeg::Error::Other { errno }) if errno == EAGAIN => {
                          // Decoder needs more input packets, exit inner loop and get next packet
                          // println!("\nDecoder needs more input (EAGAIN)."); // Debugging
                          break; // Exit the inner receive_frame loop
