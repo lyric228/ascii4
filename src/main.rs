@@ -118,7 +118,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
         .decoder()
         .video()?;
     let frame_time_base = input_stream.time_base();
-    let video_fps = input_stream.rate().into();
+    let video_fps: f64 = input_stream.rate().into();
     let target_fps = args.fps;
     let min_pts_difference = (video_fps / target_fps).round() as i64;
 
@@ -149,119 +149,119 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
 
     let temp_frame_path = main_output_dir_path.join("_temp_frame.png");
 
-    'packet_loop: for (stream, packet) in ictx.packets() {
+    for (stream, packet) in ictx.packets() {
         if stream.index() == video_stream_index {
             match decoder.send_packet(&packet) {
                 Ok(()) => (),
                 Err(e) if matches!(e, ffmpeg::Error::Other { .. }) => {
-                    eprintln!("\nПредупреждение: Нефатальная ошибка при отправке пакета: {}", e);
+                    eprintln!("\nWarning: Non-fatal error when sending packet: {}", e);
                 }
-                                         Err(e) => {
-                    return Err(anyhow!("Не удалось отправить пакет декодеру: {}", e));
-                                         }
-                                     }
+                Err(e) => {
+                    return Err(anyhow!("Failed to send packet to decoder: {}", e));
+                }
+            }
 
     let mut decoded_frame = ffmpeg::frame::Video::empty();
             loop {
-                 match decoder.receive_frame(&mut decoded_frame) {
-                     Ok(()) => {
-        video_frame_count += 1;
-                         let current_pts = decoded_frame.pts().unwrap_or(0);
+                match decoder.receive_frame(&mut decoded_frame) {
+                    Ok(()) => {
+                        video_frame_count += 1;
+                        let current_pts = decoded_frame.pts().unwrap_or(0);
 
                          if current_pts >= 0 &&
                             (last_processed_time_pts == -1 || (current_pts - last_processed_time_pts) >= min_pts_difference)
-                         {
-                             last_processed_time_pts = current_pts;
+                        {
+                            last_processed_time_pts = current_pts;
 
                              let current_second = (current_pts as f64 * frame_time_base.numerator() as f64 / frame_time_base.denominator() as f64).floor() as u64;
 
-                             if last_processed_second != Some(current_second) {
-                                 let second_dir = main_output_dir_path.join(current_second.to_string());
-                                 fs::create_dir_all(&second_dir).with_context(|| {
-                                     format!("Не удалось создать директорию для секунды {}: {:?}", current_second, second_dir)
-                                 })?;
-                                 current_second_dir = Some(second_dir);
-                                 frame_count_in_second = 1;
-                                 last_processed_second = Some(current_second);
-                             } else {
-                                 frame_count_in_second += 1;
-    }
+                            if last_processed_second != Some(current_second) {
+                                let second_dir = main_output_dir_path.join(current_second.to_string());
+                                fs::create_dir_all(&second_dir).with_context(|| {
+                                    format!("Failed to create directory for second {}: {:?}", current_second, second_dir)
+                                })?;
+                                current_second_dir = Some(second_dir);
+                                frame_count_in_second = 1;
+                                last_processed_second = Some(current_second);
+                            } else {
+                                frame_count_in_second += 1;
+                            }
 
-                             let output_dir = match &current_second_dir {
-                                 Some(dir) => dir,
-                                 None => {
-                                     eprintln!("Ошибка: Директория текущей секунды не установлена для кадра {}. Пропуск.", video_frame_count);
-                                     continue;
-                                 }
-                             };
+                            let output_dir = match &current_second_dir {
+                                Some(dir) => dir,
+                                None => {
+                                    eprintln!("Error: Current second directory not set for frame {}. Skipping.", video_frame_count);
+                                    continue;
+                                }
+                            };
 
-                             let mut rgb_frame = ffmpeg::frame::Video::empty();
-                             if scaler.run(&decoded_frame, &mut rgb_frame).is_err() {
-                                 eprintln!("Предупреждение: Масштабирование не удалось для кадра {}. Пропуск.", video_frame_count);
-                                 continue;
-                             }
+                            let mut rgb_frame = ffmpeg::frame::Video::empty();
+                            if scaler.run(&decoded_frame, &mut rgb_frame).is_err() {
+                                eprintln!("Warning: Scaling failed for frame {}. Skipping.", video_frame_count);
+                                continue;
+                            }
 
-                             let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> =
-                                 match ImageBuffer::from_raw(
-                                     rgb_frame.width(),
-                                     rgb_frame.height(),
-                                     rgb_frame.data(0).to_vec(),
-                                 ) {
-                                     Some(buf) => buf,
-                                     None => {
-                                         eprintln!("Предупреждение: Не удалось создать буфер изображения для кадра {}. Пропуск.", video_frame_count);
-                                         continue;
-                                     }
-                                 };
+                            let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                                match ImageBuffer::from_raw(
+                                    rgb_frame.width(),
+                                    rgb_frame.height(),
+                                    rgb_frame.data(0).to_vec(),
+                                ) {
+                                    Some(buf) => buf,
+                                    None => {
+                                        eprintln!("Warning: Failed to create image buffer for frame {}. Skipping.", video_frame_count);
+                                        continue;
+                                    }
+                                };
 
-                             if img_buf.save(&temp_frame_path).is_err() {
-                                 eprintln!("Предупреждение: Не удалось сохранить временный кадр {}. Пропуск.", video_frame_count);
-                                 continue;
-                             }
+                            if img_buf.save(&temp_frame_path).is_err() {
+                                eprintln!("Warning: Failed to save temporary frame {}. Skipping.", video_frame_count);
+                                continue;
+                            }
 
-                             match image_to_ascii_configurable(&temp_frame_path, &ascii_config) {
-                                 Ok(ascii_art) => {
-                                     total_output_frames += 1;
-                                     let output_filename = output_dir.join(format!("{}.txt", frame_count_in_second));
-                                     match fs::File::create(&output_filename) {
-                                         Ok(mut file) => {
-                                             if file.write_all(ascii_art.as_bytes()).is_err() {
-                                                 eprintln!("\nПредупреждение: Не удалось записать ASCII арт в файл: {:?}", output_filename);
-                                             }
-                                         }
-                                         Err(e) => {
-                                             eprintln!("\nПредупреждение: Не удалось создать выходной файл {:?}: {}", output_filename, e);
-                                         }
-                                     }
+                            match image_to_ascii_configurable(&temp_frame_path, &ascii_config) {
+                                Ok(ascii_art) => {
+                                    total_output_frames += 1;
+                                    let output_filename = output_dir.join(format!("{}.txt", frame_count_in_second));
+                                    match fs::File::create(&output_filename) {
+                                        Ok(mut file) => {
+                                            if file.write_all(ascii_art.as_bytes()).is_err() {
+                                                eprintln!("\nWarning: Failed to write ASCII art to file: {:?}", output_filename);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("\nWarning: Failed to create output file {:?}: {}", output_filename, e);
+                                        }
+                                    }
 
-                                     if total_output_frames % 10 == 0 {
-                                         print!("\rОбработано ASCII кадров: {}", total_output_frames);
-                                         std::io::stdout().flush().unwrap_or_default();
-                                     }
-                                 }
-                                 Err(e) => {
-                                     eprintln!(
-                                         "\nПредупреждение: Не удалось конвертировать кадр {} (сек {}, кадр {}) в ASCII: {}",
-                                         video_frame_count,
-                                         current_second,
-                                         frame_count_in_second,
-                                         e
-                                     );
-                                 }
-                             }
-                         }
-                     }
-                     Err(ffmpeg::Error::Eof) => {
-                         break;
-                     }
-                     Err(ffmpeg::Error::Other { errno }) if errno == EAGAIN => {
-                         break;
-                     }
-                     Err(e) => {
-                         eprintln!("\nWarning: Error receiving frame: {}", e);
-                         break;
-                     }
-                 }
+                                    if total_output_frames % 10 == 0 {
+                                        print!("\rProcessed ASCII frames: {}", total_output_frames);
+                                        std::io::stdout().flush().unwrap_or_default();
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "\nWarning: Failed to convert frame {} (sec {}, frame {}) to ASCII: {}",
+                                        video_frame_count,
+                                        current_second,
+                                        frame_count_in_second,
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(ffmpeg::Error::Eof) => {
+                        break;
+                    }
+                    Err(ffmpeg::Error::Other { errno }) if errno == EAGAIN => {
+                        break;
+                    }
+                    Err(e) => {
+                        eprintln!("\nWarning: Error receiving frame: {}", e);
+                        break;
+                    }
+                }
             }
         }
     }
