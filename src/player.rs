@@ -59,18 +59,18 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
         .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
     if let Some(audio_path) = &options.audio_path {
-        println!("Loading audio from: {:?}", audio_path);
+        println!("Loading audio from: {audio_path:?}");
         if !audio_path.exists() {
-            eprintln!("Warning: Audio file not found: {:?}", audio_path);
+            eprintln!("Warning: Audio file not found: {audio_path:?}");
         } else {
-            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open audio file: {:?}", audio_path))?);
+            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open audio file: {audio_path:?}"))?);
             match Decoder::new(file) {
                 Ok(source) => {
                     sink.append(source);
                     println!("Audio playback started.");
                 },
                 Err(e) => {
-                     eprintln!("Warning: Failed to decode audio file {:?}: {}. Audio will not play.", audio_path, e);
+                     eprintln!("Warning: Failed to decode audio file {audio_path:?}: {e}. Audio will not play.");
                 }
             }
         }
@@ -93,7 +93,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
             let frame_content = match fs::read_to_string(&frame_path) {
                  Ok(content) => content,
                  Err(e) => {
-                    eprintln!("\nError reading frame file {:?}: {}. Stopping playback.", frame_path, e);
+                    eprintln!("\nError reading frame file {frame_path:?}: {e}. Stopping playback.");
                     playback_error = Some(anyhow!("Failed to read frame: {:?}", frame_path).context(e));
                     break;
                 }
@@ -105,7 +105,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
                 cursor::MoveTo(0, 0),
             )?;
 
-            write!(stdout, "{}", frame_content)?;
+            write!(stdout, "{frame_content}")?;
             stdout.flush()?;
 
             let elapsed = start_time.elapsed();
@@ -136,7 +136,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
     let mut seconds: Vec<SecondInfo> = Vec::new();
 
-    for entry_res in fs::read_dir(base_dir).with_context(|| format!("Failed to read base directory: {:?}", base_dir))? {
+    for entry_res in fs::read_dir(base_dir).with_context(|| format!("Failed to read base directory: {base_dir:?}"))? {
         let entry = entry_res?;
         let path = entry.path();
 
@@ -148,11 +148,11 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                         frames: Vec::new(),
                     };
 
-                    for frame_entry_res in fs::read_dir(&path).with_context(|| format!("Failed to read second directory: {:?}", path))? {
+                    for frame_entry_res in fs::read_dir(&path).with_context(|| format!("Failed to read second directory: {path:?}"))? {
                         let frame_entry = frame_entry_res?;
                         let frame_path = frame_entry.path();
 
-                        if frame_path.is_file() && frame_path.extension().map_or(false, |ext| ext == "txt") {
+                        if frame_path.is_file() && frame_path.extension().is_some_and(|ext| ext == "txt") {
                             if let Some(frame_stem) = frame_path.file_stem().and_then(|s| s.to_str()) {
                                 if let Ok(frame_num) = frame_stem.parse::<u64>() {
                                     current_second.frames.push(FrameInfo {
@@ -160,7 +160,7 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                                         number: frame_num,
                                     });
                                 } else {
-                                    eprintln!("Warning: Could not parse frame number from file name: {:?}", frame_path);
+                                    eprintln!("Warning: Could not parse frame number from file name: {frame_path:?}");
                                 }
                             }
                         }
@@ -172,7 +172,7 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                     }
 
                 } else {
-                    eprintln!("Warning: Directory name is not a valid second number: {:?}", path);
+                    eprintln!("Warning: Directory name is not a valid second number: {path:?}");
                 }
             }
         }

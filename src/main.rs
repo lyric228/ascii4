@@ -88,7 +88,7 @@ fn main() -> Result<()> {
     }
 
     let duration = start_time.elapsed();
-    println!("\nCommand completed in: {:.2?}", duration);
+    println!("\nCommand completed in: {duration:.2?}");
     Ok(())
 }
 
@@ -102,7 +102,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
 
     let main_output_dir_path = Path::new(&args.output_dir);
     fs::create_dir_all(main_output_dir_path)
-        .with_context(|| format!("Failed to create main output directory: {:?}", main_output_dir_path))?;
+        .with_context(|| format!("Failed to create main output directory: {main_output_dir_path:?}"))?;
 
     let mut ictx = ffmpeg::format::input(&input_path)
         .with_context(|| format!("Failed to open input file: {}", args.input))?;
@@ -154,7 +154,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
             match decoder.send_packet(&packet) {
                 Ok(()) => (),
                 Err(e) if matches!(e, ffmpeg::Error::Other { .. }) => {
-                    eprintln!("\nWarning: Non-fatal error when sending packet: {}", e);
+                    eprintln!("\nWarning: Non-fatal error when sending packet: {e}");
                 }
                 Err(e) => {
                     return Err(anyhow!("Failed to send packet to decoder: {}", e));
@@ -178,7 +178,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                             if last_processed_second != Some(current_second) {
                                 let second_dir = main_output_dir_path.join(current_second.to_string());
                                 fs::create_dir_all(&second_dir).with_context(|| {
-                                    format!("Failed to create directory for second {}: {:?}", current_second, second_dir)
+                                    format!("Failed to create directory for second {current_second}: {second_dir:?}")
                                 })?;
                                 current_second_dir = Some(second_dir);
                                 frame_count_in_second = 1;
@@ -190,14 +190,14 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                             let output_dir = match &current_second_dir {
                                 Some(dir) => dir,
                                 None => {
-                                    eprintln!("Error: Current second directory not set for frame {}. Skipping.", video_frame_count);
+                                    eprintln!("Error: Current second directory not set for frame {video_frame_count}. Skipping.");
                                     continue;
                                 }
                             };
 
                             let mut rgb_frame = ffmpeg::frame::Video::empty();
                             if scaler.run(&decoded_frame, &mut rgb_frame).is_err() {
-                                eprintln!("Warning: Scaling failed for frame {}. Skipping.", video_frame_count);
+                                eprintln!("Warning: Scaling failed for frame {video_frame_count}. Skipping.");
                                 continue;
                             }
 
@@ -209,43 +209,39 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                                 ) {
                                     Some(buf) => buf,
                                     None => {
-                                        eprintln!("Warning: Failed to create image buffer for frame {}. Skipping.", video_frame_count);
+                                        eprintln!("Warning: Failed to create image buffer for frame {video_frame_count}. Skipping.");
                                         continue;
                                     }
                                 };
 
                             if img_buf.save(&temp_frame_path).is_err() {
-                                eprintln!("Warning: Failed to save temporary frame {}. Skipping.", video_frame_count);
+                                eprintln!("Warning: Failed to save temporary frame {video_frame_count}. Skipping.");
                                 continue;
                             }
 
                             match image_to_ascii_configurable(&temp_frame_path, &ascii_config) {
                                 Ok(ascii_art) => {
                                     total_output_frames += 1;
-                                    let output_filename = output_dir.join(format!("{}.txt", frame_count_in_second));
+                                    let output_filename = output_dir.join(format!("{frame_count_in_second}.txt"));
                                     match fs::File::create(&output_filename) {
                                         Ok(mut file) => {
                                             if file.write_all(ascii_art.as_bytes()).is_err() {
-                                                eprintln!("\nWarning: Failed to write ASCII art to file: {:?}", output_filename);
+                                                eprintln!("\nWarning: Failed to write ASCII art to file: {output_filename:?}");
                                             }
                                         }
                                         Err(e) => {
-                                            eprintln!("\nWarning: Failed to create output file {:?}: {}", output_filename, e);
+                                            eprintln!("\nWarning: Failed to create output file {output_filename:?}: {e}");
                                         }
                                     }
 
                                     if total_output_frames % 10 == 0 {
-                                        print!("\rProcessed ASCII frames: {}", total_output_frames);
+                                        print!("\rProcessed ASCII frames: {total_output_frames}");
                                         std::io::stdout().flush().unwrap_or_default();
                                     }
                                 }
                                 Err(e) => {
                                     eprintln!(
-                                        "\nWarning: Failed to convert frame {} (sec {}, frame {}) to ASCII: {}",
-                                        video_frame_count,
-                                        current_second,
-                                        frame_count_in_second,
-                                        e
+                                        "\nWarning: Failed to convert frame {video_frame_count} (sec {current_second}, frame {frame_count_in_second}) to ASCII: {e}"
                                     );
                                 }
                             }
@@ -258,7 +254,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                         break;
                     }
                     Err(e) => {
-                        eprintln!("\nWarning: Error receiving frame: {}", e);
+                        eprintln!("\nWarning: Error receiving frame: {e}");
                         break;
                     }
                 }
@@ -272,7 +268,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
 
     if let Err(e) = decoder.send_eof() {
         if e != ffmpeg::Error::Eof {
-            eprintln!("\nWarning: Failed to send final EOF to decoder: {}", e);
+            eprintln!("\nWarning: Failed to send final EOF to decoder: {e}");
         }
     }
 
