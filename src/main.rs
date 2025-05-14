@@ -2,7 +2,6 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
-use libc::EAGAIN;
 use std::{
     fs,
     io::Write,
@@ -13,6 +12,8 @@ use std::{
 use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_DETAILED};
 
 mod player;
+
+pub const EAGAIN: i32 = 11;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Converts video to ASCII art and plays it", long_about = None)]
