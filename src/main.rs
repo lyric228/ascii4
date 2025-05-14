@@ -15,6 +15,8 @@ mod player;
 
 const EAGAIN: i32 = 11;
 
+// TODO: url for audio/video in args
+
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Converts video to ASCII art and plays it", long_about = None)]
 struct Cli {
