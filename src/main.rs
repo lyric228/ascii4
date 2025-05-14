@@ -69,6 +69,20 @@ struct PlayArgs {
 }
 
 fn main() -> Result<()> {
+    ctrlc::set_handler(|| {
+        use std::process::exit;
+        use std::io::stdout;
+        use crossterm::{cursor, terminal, execute};
+
+        let mut stdout = stdout();
+
+        let _ = execute!(stdout, cursor::Show);
+        let _ = execute!(stdout, terminal::LeaveAlternateScreen);
+        let _ = stdout.flush();
+
+        exit(0);
+    }).with_context(|| "Failed to set Ctrl+C handler")?;
+
     let cli = Cli::parse();
     let start_time = Instant::now();
 
