@@ -13,7 +13,7 @@ use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_V
 
 mod player;
 
-pub const EAGAIN: i32 = 11;
+const EAGAIN: i32 = 11;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Converts video to ASCII art and plays it", long_about = None)]
