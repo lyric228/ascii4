@@ -63,8 +63,8 @@ struct PlayArgs {
     #[arg(short, long, default_value_t = 30.0)]
     fps: f64,
 
-    /// Optional path to audio file (e.g., mp3, wav) to play with animation
-    #[arg(short, long)]
+    /// Optional path to audio file or video file containing audio track
+    #[arg(short, long, help = "Path to audio file or video file with audio track")]
     audio: Option<PathBuf>,
 }
 
