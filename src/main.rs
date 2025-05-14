@@ -9,7 +9,7 @@ use std::{
     time::Instant,
     convert::TryInto,
 };
-use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_DETAILED};
+use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_VERY_DETAILED};
 
 mod player;
 
@@ -144,7 +144,7 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
     let ascii_config = AsciiArtConfig {
         width: ascii_width,
         height: ascii_height,
-        char_set: CHAR_SET_DETAILED.chars().collect(),
+        char_set: CHAR_SET_VERY_DETAILED.chars().collect(),
         ..Default::default()
     };
 
