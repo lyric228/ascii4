@@ -5,9 +5,9 @@ use std::{
     fs::{self, File},
     io::{stdout, BufReader, Write},
     path::{Path, PathBuf},
-    thread,
     time::{Duration, Instant},
 };
+use sysx::time::safe_sleep;
 
 /// Player options for ASCII animation
 #[derive(Debug)]
@@ -54,23 +54,29 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
     // Audio initialization
     let (_stream, stream_handle) = OutputStream::try_default()
-         .map_err(|e| anyhow!("Failed to get default audio output device: {}", e))?;
+        .map_err(|e| anyhow!("Failed to get default audio output device: {}", e))?;
     let sink = Sink::try_new(&stream_handle)
         .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
     if let Some(audio_path) = &options.audio_path {
         println!("Loading audio from: {audio_path:?}");
+        // Attempt to load audio stream from the provided path (could be audio or video file)
+        println!("Attempting to load audio stream from: {audio_path:?}");
         if !audio_path.exists() {
-            eprintln!("Warning: Audio file not found: {audio_path:?}");
+            eprintln!("Warning: Audio/video file not found at: {audio_path:?}");
         } else {
-            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open audio file: {audio_path:?}"))?);
+
+            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
             match Decoder::new(file) {
                 Ok(source) => {
                     sink.append(source);
-                    println!("Audio playback started.");
+
+                    // Indicate that the audio stream was successfully loaded and playback started
+                    println!("Audio stream loaded and playback started.");
                 },
                 Err(e) => {
-                     eprintln!("Warning: Failed to decode audio file {audio_path:?}: {e}. Audio will not play.");
+                     // Provide a warning if decoding the audio stream fails
+                     eprintln!("Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play.");
                 }
             }
         }
@@ -84,18 +90,17 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
     // Playback loop
     let frame_duration = Duration::from_secs_f64(1.0 / options.fps);
-    let mut playback_error = None;
 
-    let scope_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let scope_result: std::thread::Result<Result<()>> = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         for frame_path in ordered_frames {
             let start_time = Instant::now();
-
             let frame_content = match fs::read_to_string(&frame_path) {
                  Ok(content) => content,
                  Err(e) => {
                     eprintln!("\nError reading frame file {frame_path:?}: {e}. Stopping playback.");
-                    playback_error = Some(anyhow!("Failed to read frame: {:?}", frame_path).context(e));
-                    break;
+
+
+                    return Err(anyhow!("Failed to read frame: {:?}", frame_path).context(e));
                 }
             };
 
@@ -110,9 +115,11 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
             let elapsed = start_time.elapsed();
             let sleep_duration = frame_duration.saturating_sub(elapsed);
-            thread::sleep(sleep_duration);
+
+            safe_sleep(sleep_duration)?;
         }
-        Ok::<(), anyhow::Error>(())
+
+        Ok(())
     }));
 
     // Terminal cleanup
@@ -124,7 +131,8 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     println!("\nPlayback finished.");
 
     match scope_result {
-        Ok(_) => playback_error.map_or(Ok(()), Err),
+
+        Ok(inner_result) => inner_result,
         Err(panic_payload) => {
             eprintln!("\nPlayback panicked!");
             std::panic::resume_unwind(panic_payload);
