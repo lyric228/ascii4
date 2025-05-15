@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 sysx = { git = "https://github.com/lyric228/sysx.git" }
-clap = { version = "4.5.37", features = ["derive"] }
+clap = { version = "4.5.38", features = ["derive"] }
 rodio = { version = "0.20.1", features = ["mp3", "wav", "vorbis", "flac"] }
 crossterm = "0.29.0"
 ffmpeg-next = "7.1.0"
