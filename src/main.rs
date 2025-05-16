@@ -1,15 +1,15 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
 use std::{
+    convert::TryInto,
     fs,
     io::Write,
     path::{Path, PathBuf},
     time::Instant,
-    convert::TryInto,
 };
-use sysx::utils::ascii::{image_to_ascii_configurable, AsciiArtConfig, CHAR_SET_VERY_DETAILED};
+use sysx::utils::ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable};
 
 mod player;
 
@@ -69,7 +69,11 @@ struct PlayArgs {
     fps: f64,
 
     /// Optional path to audio file or video file containing audio track
-    #[arg(short, long, help = "Path to audio file or video file with audio track")]
+    #[arg(
+        short,
+        long,
+        help = "Path to audio file or video file with audio track"
+    )]
     audio: Option<PathBuf>,
 
     /// Loop the animation and audio like a GIF
@@ -79,9 +83,9 @@ struct PlayArgs {
 
 fn main() -> Result<()> {
     ctrlc::set_handler(|| {
-        use std::process::exit;
+        use crossterm::{cursor, execute, terminal};
         use std::io::stdout;
-        use crossterm::{cursor, terminal, execute};
+        use std::process::exit;
 
         let mut stdout = stdout();
 
@@ -90,7 +94,8 @@ fn main() -> Result<()> {
         let _ = stdout.flush();
 
         exit(0);
-    }).with_context(|| "Failed to set Ctrl+C handler")?;
+    })
+    .with_context(|| "Failed to set Ctrl+C handler")?;
 
     let cli = Cli::parse();
     let start_time = Instant::now();
@@ -126,8 +131,9 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
     }
 
     let main_output_dir_path = Path::new(&args.output_dir);
-    fs::create_dir_all(main_output_dir_path)
-        .with_context(|| format!("Failed to create main output directory: {main_output_dir_path:?}"))?;
+    fs::create_dir_all(main_output_dir_path).with_context(|| {
+        format!("Failed to create main output directory: {main_output_dir_path:?}")
+    })?;
 
     let mut ictx = ffmpeg::format::input(&input_path)
         .with_context(|| format!("Failed to open input file: {}", args.input))?;
@@ -186,22 +192,27 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                 }
             }
 
-    let mut decoded_frame = ffmpeg::frame::Video::empty();
+            let mut decoded_frame = ffmpeg::frame::Video::empty();
             loop {
                 match decoder.receive_frame(&mut decoded_frame) {
                     Ok(()) => {
                         video_frame_count += 1;
                         let current_pts = decoded_frame.pts().unwrap_or(0);
 
-                         if current_pts >= 0 &&
-                            (last_processed_time_pts == -1 || (current_pts - last_processed_time_pts) >= min_pts_difference)
+                        if current_pts >= 0
+                            && (last_processed_time_pts == -1
+                                || (current_pts - last_processed_time_pts) >= min_pts_difference)
                         {
                             last_processed_time_pts = current_pts;
 
-                             let current_second = (current_pts as f64 * frame_time_base.numerator() as f64 / frame_time_base.denominator() as f64).floor() as u64;
+                            let current_second = (current_pts as f64
+                                * frame_time_base.numerator() as f64
+                                / frame_time_base.denominator() as f64)
+                                .floor() as u64;
 
                             if last_processed_second != Some(current_second) {
-                                let second_dir = main_output_dir_path.join(current_second.to_string());
+                                let second_dir =
+                                    main_output_dir_path.join(current_second.to_string());
                                 fs::create_dir_all(&second_dir).with_context(|| {
                                     format!("Failed to create directory for second {current_second}: {second_dir:?}")
                                 })?;
@@ -215,47 +226,59 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                             let output_dir = match &current_second_dir {
                                 Some(dir) => dir,
                                 None => {
-                                    eprintln!("Error: Current second directory not set for frame {video_frame_count}. Skipping.");
+                                    eprintln!(
+                                        "Error: Current second directory not set for frame {video_frame_count}. Skipping."
+                                    );
                                     continue;
                                 }
                             };
 
                             let mut rgb_frame = ffmpeg::frame::Video::empty();
                             if scaler.run(&decoded_frame, &mut rgb_frame).is_err() {
-                                eprintln!("Warning: Scaling failed for frame {video_frame_count}. Skipping.");
+                                eprintln!(
+                                    "Warning: Scaling failed for frame {video_frame_count}. Skipping."
+                                );
                                 continue;
                             }
 
-                            let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> =
-                                match ImageBuffer::from_raw(
-                                    rgb_frame.width(),
-                                    rgb_frame.height(),
-                                    rgb_frame.data(0).to_vec(),
-                                ) {
-                                    Some(buf) => buf,
-                                    None => {
-                                        eprintln!("Warning: Failed to create image buffer for frame {video_frame_count}. Skipping.");
-                                        continue;
-                                    }
-                                };
+                            let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> = match ImageBuffer::from_raw(
+                                rgb_frame.width(),
+                                rgb_frame.height(),
+                                rgb_frame.data(0).to_vec(),
+                            ) {
+                                Some(buf) => buf,
+                                None => {
+                                    eprintln!(
+                                        "Warning: Failed to create image buffer for frame {video_frame_count}. Skipping."
+                                    );
+                                    continue;
+                                }
+                            };
 
                             if img_buf.save(&temp_frame_path).is_err() {
-                                eprintln!("Warning: Failed to save temporary frame {video_frame_count}. Skipping.");
+                                eprintln!(
+                                    "Warning: Failed to save temporary frame {video_frame_count}. Skipping."
+                                );
                                 continue;
                             }
 
                             match image_to_ascii_configurable(&temp_frame_path, &ascii_config) {
                                 Ok(ascii_art) => {
                                     total_output_frames += 1;
-                                    let output_filename = output_dir.join(format!("{frame_count_in_second}.txt"));
+                                    let output_filename =
+                                        output_dir.join(format!("{frame_count_in_second}.txt"));
                                     match fs::File::create(&output_filename) {
                                         Ok(mut file) => {
                                             if file.write_all(ascii_art.as_bytes()).is_err() {
-                                                eprintln!("\nWarning: Failed to write ASCII art to file: {output_filename:?}");
+                                                eprintln!(
+                                                    "\nWarning: Failed to write ASCII art to file: {output_filename:?}"
+                                                );
                                             }
                                         }
                                         Err(e) => {
-                                            eprintln!("\nWarning: Failed to create output file {output_filename:?}: {e}");
+                                            eprintln!(
+                                                "\nWarning: Failed to create output file {output_filename:?}: {e}"
+                                            );
                                         }
                                     }
 

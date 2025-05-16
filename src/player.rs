@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Context, Result};
-use crossterm::{cursor, execute, terminal, ExecutableCommand};
-use rodio::{Decoder, OutputStream, Sink};
+use anyhow::{Context, Result, anyhow};
+use crossterm::{ExecutableCommand, cursor, execute, terminal};
+use rodio::{Decoder, OutputStream, Sink, Source};
 use std::{
     fs::{self, File},
-    io::{stdout, BufReader, Write},
+    io::{BufReader, Write, stdout},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -56,8 +56,8 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     // Audio initialization
     let (_stream, stream_handle) = OutputStream::try_default()
         .map_err(|e| anyhow!("Failed to get default audio output device: {}", e))?;
-    let sink = Sink::try_new(&stream_handle)
-        .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
+    let sink =
+        Sink::try_new(&stream_handle).map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
     if let Some(audio_path) = &options.audio_path {
         println!("Loading audio from: {audio_path:?}");
@@ -68,23 +68,26 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
                 Ok(file) => {
                     let file = BufReader::new(file);
                     match Decoder::new(file) {
-                Ok(source) => {
-                    let converted = source.convert_samples::<f32>();
-                    sink.append(converted);
+                        Ok(source) => {
+                            let converted = source.convert_samples::<f32>();
+                            sink.append(converted);
                             println!("Audio stream loaded.");
-                },
-                Err(e) => {
-                    eprintln!("Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play.");
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play."
+                            );
+                        }
+                    }
                 }
-            }
-                }
                 Err(e) => {
-                    eprintln!("Warning: Failed to open file {audio_path:?}: {e}. Audio will not play.");
+                    eprintln!(
+                        "Warning: Failed to open file {audio_path:?}: {e}. Audio will not play."
+                    );
                 }
             }
         }
     }
-
 
     // Terminal preparation
     let mut stdout = stdout();
@@ -97,20 +100,20 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
     let mut playback_loop = || -> Result<()> {
         let reload_audio = |sink: &Sink, path: &Path| -> Result<()> {
-    sink.stop();
+            sink.stop();
             match File::open(path) {
                 Ok(file) => {
                     let file = BufReader::new(file);
                     let source = Decoder::new(file)?.convert_samples::<f32>();
                     sink.append(source);
-    Ok(())
-}
+                    Ok(())
+                }
                 Err(e) => {
-                    eprintln!("Audio reload error: {}", e);
+                    eprintln!("Audio reload error: {e}");
                     Err(e.into())
                 }
             }
-                    };
+        };
 
         if let Some(audio_path) = &options.audio_path {
             let _ = reload_audio(&sink, audio_path); // Ignore reload errors
@@ -118,9 +121,9 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
         for frame_path in &ordered_frames {
             let start_time = Instant::now();
-            let frame_content = match fs::read_to_string(&frame_path) {
-                 Ok(content) => content,
-                 Err(e) => {
+            let frame_content = match fs::read_to_string(frame_path) {
+                Ok(content) => content,
+                Err(e) => {
                     eprintln!("\nError reading frame file {frame_path:?}: {e}. Stopping playback.");
                     return Err(anyhow!("Failed to read frame: {:?}", frame_path).context(e));
                 }
@@ -147,17 +150,15 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     if options.loop_gif {
         loop {
             if let Err(e) = playback_loop() {
-                eprintln!("Error during playback loop: {}", e);
+                eprintln!("Error during playback loop: {e}");
                 break;
             }
             safe_sleep("10ms");
         }
-                                } else {
-        if let Err(e) = playback_loop() {
-            eprintln!("Error during playback: {}", e);
-            return Err(e);
+    } else if let Err(e) = playback_loop() {
+        eprintln!("Error during playback: {e}");
+        return Err(e);
     }
-                            }
 
     // Terminal cleanup
     let _ = stdout.execute(cursor::Show);
@@ -174,7 +175,9 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
     let mut seconds: Vec<SecondInfo> = Vec::new();
 
-    for entry_res in fs::read_dir(base_dir).with_context(|| format!("Failed to read base directory: {base_dir:?}"))? {
+    for entry_res in fs::read_dir(base_dir)
+        .with_context(|| format!("Failed to read base directory: {base_dir:?}"))?
+    {
         let entry = entry_res?;
         let path = entry.path();
 
@@ -186,29 +189,36 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                         frames: Vec::new(),
                     };
 
-                    for frame_entry_res in fs::read_dir(&path).with_context(|| format!("Failed to read second directory: {path:?}"))? {
+                    for frame_entry_res in fs::read_dir(&path)
+                        .with_context(|| format!("Failed to read second directory: {path:?}"))?
+                    {
                         let frame_entry = frame_entry_res?;
                         let frame_path = frame_entry.path();
 
-                        if frame_path.is_file() && frame_path.extension().is_some_and(|ext| ext == "txt") {
-                            if let Some(frame_stem) = frame_path.file_stem().and_then(|s| s.to_str()) {
+                        if frame_path.is_file()
+                            && frame_path.extension().is_some_and(|ext| ext == "txt")
+                        {
+                            if let Some(frame_stem) =
+                                frame_path.file_stem().and_then(|s| s.to_str())
+                            {
                                 if let Ok(frame_num) = frame_stem.parse::<u64>() {
                                     current_second.frames.push(FrameInfo {
                                         path: frame_path,
                                         number: frame_num,
                                     });
                                 } else {
-                                    eprintln!("Warning: Could not parse frame number from file name: {frame_path:?}");
-                }
-            }
-        }
-    }
+                                    eprintln!(
+                                        "Warning: Could not parse frame number from file name: {frame_path:?}"
+                                    );
+                                }
+                            }
+                        }
+                    }
                     current_second.frames.sort_by_key(|f| f.number);
 
                     if !current_second.frames.is_empty() {
                         seconds.push(current_second);
                     }
-
                 } else {
                     eprintln!("Warning: Directory name is not a valid second number: {path:?}");
                 }
