@@ -153,7 +153,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
                 eprintln!("Error during playback loop: {e}");
                 break;
             }
-            safe_sleep("10ms");
+            safe_sleep("10ms")?;
         }
     } else if let Err(e) = playback_loop() {
         eprintln!("Error during playback: {e}");
