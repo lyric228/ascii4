@@ -18,7 +18,7 @@ const EAGAIN: i32 = 11;
 // TODO: url for audio/video in args
 // TODO: use video (.mp4) for -a/--audio
 // TODO: photo convert
-// TODO: GIF -g/--gif (animation&audio loop)
+// TODO: terminal auto size (convert)
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Converts video to ASCII art and plays it", long_about = None)]
