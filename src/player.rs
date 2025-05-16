@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use crossterm::{cursor, execute, terminal, ExecutableCommand};
-use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::{Decoder, OutputStream, Sink};
 use std::{
     fs::{self, File},
     io::{stdout, BufReader, Write},
@@ -59,23 +59,27 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     let sink = Sink::try_new(&stream_handle)
         .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
-    let mut audio_source: Option<Box<dyn rodio::Source<Item = f32> + Send>> = None;
-
     if let Some(audio_path) = &options.audio_path {
         println!("Loading audio from: {audio_path:?}");
         if !audio_path.exists() {
-            eprintln!("Warning: Audio/video file not found at: {audio_path:?}");
+            eprintln!("Warning: File not found at: {audio_path:?}");
         } else {
-            let file = BufReader::new(File::open(audio_path)
-                .with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
-
-            match Decoder::new(file) {
+            match File::open(audio_path) {
+                Ok(file) => {
+                    let file = BufReader::new(file);
+                    match Decoder::new(file) {
                 Ok(source) => {
-                    audio_source = Some(Box::new(source));
-                    println!("Audio stream loaded.");
+                    let converted = source.convert_samples::<f32>();
+                    sink.append(converted);
+                            println!("Audio stream loaded.");
                 },
                 Err(e) => {
                     eprintln!("Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play.");
+                }
+            }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to open file {audio_path:?}: {e}. Audio will not play.");
                 }
             }
         }
@@ -92,34 +96,24 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     let frame_duration = Duration::from_secs_f64(1.0 / options.fps);
 
     let mut playback_loop = || -> Result<()> {
-        if options.loop_gif && audio_source.is_some() {
+        let reload_audio = |sink: &Sink, path: &Path| -> Result<()> {
     sink.stop();
-            let audio_path = options.audio_path.as_ref().unwrap();
-            let file = BufReader::new(File::open(audio_path)
-                .with_context(|| format!("Failed to re-open file for audio stream: {audio_path:?}"))?);
+            match File::open(path) {
+                Ok(file) => {
+                    let file = BufReader::new(file);
+                    let source = Decoder::new(file)?.convert_samples::<f32>();
+                    sink.append(source);
+    Ok(())
+}
+                Err(e) => {
+                    eprintln!("Audio reload error: {}", e);
+                    Err(e.into())
+                }
+            }
+                    };
 
-            match Decoder::new(file) {
-                Ok(source) => {
-                    sink.append(source);
-                    println!("Audio stream reloaded for loop.");
-                },
-                Err(e) => {
-                    eprintln!("Warning: Failed to re-decode audio stream for loop: {e}. Audio will not play during this loop.");
-                }
-            }
-        } else if audio_source.is_some() && sink.empty() && !options.loop_gif {
-            let audio_path = options.audio_path.as_ref().unwrap();
-            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
-            
-            match Decoder::new(file) {
-                Ok(source) => {
-                    sink.append(source);
-                    println!("Audio stream appended.");
-                },
-                Err(e) => {
-                        eprintln!("Warning: Failed to decode audio stream: {e}. Audio will not play.");
-                }
-            }
+        if let Some(audio_path) = &options.audio_path {
+            let _ = reload_audio(&sink, audio_path); // Ignore reload errors
         }
 
         for frame_path in &ordered_frames {
