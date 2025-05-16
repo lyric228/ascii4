@@ -1,13 +1,13 @@
 use anyhow::{Context, Result, anyhow};
 use crossterm::{ExecutableCommand, cursor, execute, terminal};
 use rodio::{Decoder, OutputStream, Sink, Source};
+use sysx::time::safe_sleep;
 use std::{
     fs::{self, File},
     io::{BufReader, Write, stdout},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use sysx::time::safe_sleep;
 
 /// Player options for ASCII animation
 #[derive(Debug)]
