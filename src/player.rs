@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use crossterm::{cursor, execute, terminal, ExecutableCommand};
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::{Decoder, OutputStream, Sink, Source};
 use std::{
     fs::{self, File},
     io::{stdout, BufReader, Write},
@@ -15,6 +15,7 @@ pub struct PlayerOptions {
     pub frames_dir: PathBuf,
     pub fps: f64,
     pub audio_path: Option<PathBuf>,
+    pub loop_gif: bool,
 }
 
 /// Structure for frame path and number
@@ -58,29 +59,28 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     let sink = Sink::try_new(&stream_handle)
         .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
+    let mut audio_source: Option<Box<dyn rodio::Source<Item = f32> + Send>> = None;
+
     if let Some(audio_path) = &options.audio_path {
         println!("Loading audio from: {audio_path:?}");
-        // Attempt to load audio stream from the provided path (could be audio or video file)
-        println!("Attempting to load audio stream from: {audio_path:?}");
         if !audio_path.exists() {
             eprintln!("Warning: Audio/video file not found at: {audio_path:?}");
         } else {
+            let file = BufReader::new(File::open(audio_path)
+                .with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
 
-            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
             match Decoder::new(file) {
                 Ok(source) => {
-                    sink.append(source);
-
-                    // Indicate that the audio stream was successfully loaded and playback started
-                    println!("Audio stream loaded and playback started.");
+                    audio_source = Some(Box::new(source));
+                    println!("Audio stream loaded.");
                 },
                 Err(e) => {
-                     // Provide a warning if decoding the audio stream fails
-                     eprintln!("Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play.");
+                    eprintln!("Warning: Failed to decode audio stream from {audio_path:?}: {e}. Audio will not play.");
                 }
             }
         }
     }
+
 
     // Terminal preparation
     let mut stdout = stdout();
@@ -91,15 +91,43 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     // Playback loop
     let frame_duration = Duration::from_secs_f64(1.0 / options.fps);
 
-    let scope_result: std::thread::Result<Result<()>> = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        for frame_path in ordered_frames {
+    let mut playback_loop = || -> Result<()> {
+        if options.loop_gif && audio_source.is_some() {
+    sink.stop();
+            let audio_path = options.audio_path.as_ref().unwrap();
+            let file = BufReader::new(File::open(audio_path)
+                .with_context(|| format!("Failed to re-open file for audio stream: {audio_path:?}"))?);
+
+            match Decoder::new(file) {
+                Ok(source) => {
+                    sink.append(source);
+                    println!("Audio stream reloaded for loop.");
+                },
+                Err(e) => {
+                    eprintln!("Warning: Failed to re-decode audio stream for loop: {e}. Audio will not play during this loop.");
+                }
+            }
+        } else if audio_source.is_some() && sink.empty() && !options.loop_gif {
+            let audio_path = options.audio_path.as_ref().unwrap();
+            let file = BufReader::new(File::open(audio_path).with_context(|| format!("Failed to open file for audio stream: {audio_path:?}"))?);
+            
+            match Decoder::new(file) {
+                Ok(source) => {
+                    sink.append(source);
+                    println!("Audio stream appended.");
+                },
+                Err(e) => {
+                        eprintln!("Warning: Failed to decode audio stream: {e}. Audio will not play.");
+                }
+            }
+        }
+
+        for frame_path in &ordered_frames {
             let start_time = Instant::now();
             let frame_content = match fs::read_to_string(&frame_path) {
                  Ok(content) => content,
                  Err(e) => {
                     eprintln!("\nError reading frame file {frame_path:?}: {e}. Stopping playback.");
-
-
                     return Err(anyhow!("Failed to read frame: {:?}", frame_path).context(e));
                 }
             };
@@ -120,7 +148,22 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
         }
 
         Ok(())
-    }));
+    };
+
+    if options.loop_gif {
+        loop {
+            if let Err(e) = playback_loop() {
+                eprintln!("Error during playback loop: {}", e);
+                break;
+            }
+            safe_sleep("10ms");
+        }
+                                } else {
+        if let Err(e) = playback_loop() {
+            eprintln!("Error during playback: {}", e);
+            return Err(e);
+    }
+                            }
 
     // Terminal cleanup
     let _ = stdout.execute(cursor::Show);
@@ -130,14 +173,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     sink.stop();
     println!("\nPlayback finished.");
 
-    match scope_result {
-
-        Ok(inner_result) => inner_result,
-        Err(panic_payload) => {
-            eprintln!("\nPlayback panicked!");
-            std::panic::resume_unwind(panic_payload);
-        }
-    }
+    Ok(())
 }
 
 /// Discovers and sorts frame files in directory
@@ -169,10 +205,10 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                                     });
                                 } else {
                                     eprintln!("Warning: Could not parse frame number from file name: {frame_path:?}");
-                                }
-                            }
-                        }
-                    }
+                }
+            }
+        }
+    }
                     current_second.frames.sort_by_key(|f| f.number);
 
                     if !current_second.frames.is_empty() {

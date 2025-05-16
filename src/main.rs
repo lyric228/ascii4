@@ -71,6 +71,10 @@ struct PlayArgs {
     /// Optional path to audio file or video file containing audio track
     #[arg(short, long, help = "Path to audio file or video file with audio track")]
     audio: Option<PathBuf>,
+
+    /// Loop the animation and audio like a GIF
+    #[arg(short = 'g', long = "gif", default_value_t = false)]
+    loop_gif: bool,
 }
 
 fn main() -> Result<()> {
@@ -102,6 +106,7 @@ fn main() -> Result<()> {
                 frames_dir: args.frames_dir,
                 fps: args.fps,
                 audio_path: args.audio,
+                loop_gif: args.loop_gif,
             };
             player::play_animation(player_options)?;
         }
