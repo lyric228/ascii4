@@ -19,6 +19,7 @@ const EAGAIN: i32 = 11;
 // TODO: use video (.mp4) for -a/--audio
 // TODO: photo convert
 // TODO: terminal auto size (convert)
+// TODO: reverse video
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Converts video to ASCII art and plays it", long_about = None)]
