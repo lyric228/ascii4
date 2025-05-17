@@ -16,6 +16,7 @@ pub struct PlayerOptions {
     pub fps: f64,
     pub audio_path: Option<PathBuf>,
     pub loop_gif: bool,
+    pub sync: bool,
 }
 
 /// Structure for frame path and number
@@ -114,6 +115,14 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
 
     let playback_loop = || -> Result<()> {
+        if options.sync {
+    sink.stop();
+            if let Some(path) = &options.audio_path {
+                load_audio_file(&sink, path)
+                    .unwrap_or_else(|e| eprintln!("Audio reload error: {e}"));
+}
+        }
+
         let frame_duration = Duration::from_secs_f64(1.0 / options.fps);
         let mut last_frame_time = Instant::now();
 
@@ -131,16 +140,12 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
     if options.loop_gif {
         loop {
-            if let Err(e) = playback_loop() {
-                eprintln!("Error during playback loop: {e}");
-                break;
-        }
-            safe_sleep("10ms")?; // Small pause between loops
+            playback_loop()?;
+            safe_sleep("10ms")?;
                     }
-    } else if let Err(e) = playback_loop() {
-        eprintln!("Error during playback: {e}");
-        return Err(e);
-    }
+                                } else {
+        playback_loop()?;
+                            }
 
     sink.stop();
     println!("\nPlayback finished.");
@@ -182,9 +187,9 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                                 if let Ok(frame_num) = frame_stem.parse::<u64>() {
                                     current_second.frames.push(FrameInfo {
                                         path: frame_path,
-                                        number: frame_num,
-                                    });
-                                } else {
+                             number: frame_num,
+                         });
+                    } else {
                                     eprintln!(
                                         "Warning: Could not parse frame number from file name: {frame_path:?}"
                                     );
@@ -223,8 +228,8 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                     }
                 } else {
                      eprintln!("Warning: Could not parse frame number from root file name: {path:?}");
-                }
              }
+    }
         }
     }
 

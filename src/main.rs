@@ -80,6 +80,15 @@ struct PlayArgs {
     /// Loop the animation and audio like a GIF
     #[arg(short = 'g', long = "gif", default_value_t = false)]
     loop_gif: bool,
+
+    /// Sync audio with animation loop (requires --gif)
+    #[arg(
+        short,
+        long,
+        requires = "loop_gif",
+        help = "Restart audio with each animation loop (requires --gif)"
+    )]
+    sync: bool,
 }
 
 fn main() -> Result<()> {
@@ -113,6 +122,7 @@ fn main() -> Result<()> {
                 fps: args.fps,
                 audio_path: args.audio,
                 loop_gif: args.loop_gif,
+                sync: args.sync,
             };
             player::play_animation(player_options)?;
         }
