@@ -149,7 +149,6 @@ impl Drop for CleanupGuard {
     }
 }
 
-
 fn run_conversion(args: ConvertArgs) -> Result<()> {
     ffmpeg::init().context("Failed to initialize FFmpeg")?;
 
@@ -165,7 +164,6 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
 
     let temp_frame_path = main_output_dir_path.join("_temp_frame.png");
     let _cleanup_guard = CleanupGuard::new(temp_frame_path.clone()); // Use the guard for cleanup
-
 
     let mut ictx = ffmpeg::format::input(&input_path)
         .with_context(|| format!("Failed to open input file: {}", args.input))?;
@@ -219,8 +217,8 @@ fn run_conversion(args: ConvertArgs) -> Result<()> {
                 }
                 Err(e) => {
                     return Err(anyhow!("Failed to send packet to decoder: {}", e));
+                }
             }
-                                    }
 
             let mut decoded_frame = ffmpeg::frame::Video::empty();
             loop {

@@ -1,13 +1,13 @@
 use anyhow::{Context, Result, anyhow};
 use crossterm::{ExecutableCommand, cursor, execute, terminal};
 use rodio::{Decoder, OutputStream, Sink, Source};
-use sysx::time::safe_sleep;
 use std::{
     fs::{self, File},
     io::{BufReader, Write, stdout},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use sysx::time::safe_sleep;
 
 /// Player options for ASCII animation
 #[derive(Debug)]
@@ -37,7 +37,7 @@ struct TerminalGuard;
 
 impl TerminalGuard {
     fn new() -> Self {
-    let mut stdout = stdout();
+        let mut stdout = stdout();
         let _ = stdout.execute(terminal::EnterAlternateScreen);
         let _ = stdout.execute(cursor::Hide);
         Self
@@ -47,9 +47,9 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let mut stdout = stdout();
-    let _ = stdout.execute(cursor::Show);
-    let _ = stdout.execute(terminal::LeaveAlternateScreen);
-    let _ = stdout.flush();
+        let _ = stdout.execute(cursor::Show);
+        let _ = stdout.execute(terminal::LeaveAlternateScreen);
+        let _ = stdout.flush();
     }
 }
 
@@ -58,9 +58,8 @@ fn initialize_audio(options: &PlayerOptions) -> Result<(Sink, OutputStream)> {
     let sink = Sink::try_new(&stream_handle)?;
 
     if let Some(path) = &options.audio_path {
-        load_audio_file(&sink, path)
-            .unwrap_or_else(|e| eprintln!("Audio loading error: {e}"));
-}
+        load_audio_file(&sink, path).unwrap_or_else(|e| eprintln!("Audio loading error: {e}"));
+    }
 
     Ok((sink, stream))
 }
@@ -110,17 +109,18 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
 
     let frame_contents: Vec<String> = ordered_frames
         .iter()
-        .map(|path| fs::read_to_string(path).context(format!("Failed to read frame file: {:?}", path)))
+        .map(|path| {
+            fs::read_to_string(path).context(format!("Failed to read frame file: {path:?}"))
+        })
         .collect::<Result<_, _>>()?;
-
 
     let playback_loop = || -> Result<()> {
         if options.sync {
-    sink.stop();
+            sink.stop();
             if let Some(path) = &options.audio_path {
                 load_audio_file(&sink, path)
                     .unwrap_or_else(|e| eprintln!("Audio reload error: {e}"));
-}
+            }
         }
 
         let frame_duration = Duration::from_secs_f64(1.0 / options.fps);
@@ -134,7 +134,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
             safe_sleep(sleep_duration)?;
 
             last_frame_time = Instant::now();
-                                }
+        }
         Ok(())
     };
 
@@ -142,10 +142,10 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
         loop {
             playback_loop()?;
             safe_sleep("10ms")?;
-                    }
-                                } else {
+        }
+    } else {
         playback_loop()?;
-                            }
+    }
 
     sink.stop();
     println!("\nPlayback finished.");
@@ -187,14 +187,14 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                                 if let Ok(frame_num) = frame_stem.parse::<u64>() {
                                     current_second.frames.push(FrameInfo {
                                         path: frame_path,
-                             number: frame_num,
-                         });
-                    } else {
+                                        number: frame_num,
+                                    });
+                                } else {
                                     eprintln!(
                                         "Warning: Could not parse frame number from file name: {frame_path:?}"
                                     );
+                                }
                             }
-    }
                         }
                     }
                     current_second.frames.sort_by_key(|f| f.number);
@@ -207,16 +207,16 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                 }
             }
         } else if path.is_file() && path.extension().is_some_and(|ext| ext == "txt") {
-             if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                 if let Ok(frame_num) = file_stem.parse::<u64>() {
                     // Collect root files into a single SecondInfo { number: 0 } entry
                     // Find or create the SecondInfo for number 0
                     let second_0 = seconds.iter_mut().find(|s| s.number == 0);
                     if let Some(second) = second_0 {
-                         second.frames.push(FrameInfo {
-                             path,
-                             number: frame_num,
-                         });
+                        second.frames.push(FrameInfo {
+                            path,
+                            number: frame_num,
+                        });
                     } else {
                         seconds.push(SecondInfo {
                             number: 0,
@@ -227,9 +227,11 @@ fn discover_and_sort_frames(base_dir: &Path) -> Result<Vec<PathBuf>> {
                         });
                     }
                 } else {
-                     eprintln!("Warning: Could not parse frame number from root file name: {path:?}");
-             }
-    }
+                    eprintln!(
+                        "Warning: Could not parse frame number from root file name: {path:?}"
+                    );
+                }
+            }
         }
     }
 
