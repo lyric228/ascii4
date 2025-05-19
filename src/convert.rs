@@ -8,7 +8,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use sysx::utils::ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable};
+use sysx::utils::{ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable}, term::{tx, ty, txy}};
 use ffmpeg::software::scaling;
 
 const EAGAIN: i32 = 11;
@@ -106,8 +106,24 @@ pub fn run_conversion(args: ConvertArgs) -> Result<()> {
     let mut current_second_dir: Option<PathBuf> = None;
     let mut frame_count_in_second = 0;
 
-    let ascii_width: u32 = args.width.try_into().context("Width value too large")?;
-    let ascii_height: u32 = args.height.try_into().context("Height value too large")?;
+    let (mut ascii_width, mut ascii_height) = (args.width, args.height);
+
+    if args.auto_size {
+        if let Some((term_width, term_height)) = txy() {
+            if args.width == 100 { // only if width is not specified (default value)
+                ascii_width = term_width as usize;
+            }
+            if args.height == 50 { // only if height is not specified (default value)
+                ascii_height = term_height as usize;
+            }
+        } else {
+            eprintln!("Warning: Could not determine terminal size, using default dimensions");
+        }
+    }
+
+    let ascii_width: u32 = ascii_width.try_into().context("Width value too large")?;
+    let ascii_height: u32 = ascii_height.try_into().context("Height value too large")?;
+
     let ascii_config = AsciiArtConfig {
         width: ascii_width,
         height: ascii_height,
@@ -124,8 +140,8 @@ pub fn run_conversion(args: ConvertArgs) -> Result<()> {
                 }
                 Err(e) => {
                     return Err(anyhow!("Failed to send packet to decoder: {}", e));
-                }
             }
+                                    }
 
             let mut decoded_frame = ffmpeg::frame::Video::empty();
             loop {
