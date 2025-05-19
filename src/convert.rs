@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use sysx::utils::ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable};
+use ffmpeg::software::scaling;
 
 const EAGAIN: i32 = 11;
 
@@ -89,14 +90,14 @@ pub fn run_conversion(args: ConvertArgs) -> Result<()> {
     let target_fps = args.fps;
     let min_pts_difference = (video_fps / target_fps).round() as i64;
 
-    let mut scaler = ffmpeg::software::scaling::Context::get(
+    let mut scaler = scaling::Context::get(
         decoder.format(),
         decoder.width(),
         decoder.height(),
         ffmpeg::format::Pixel::RGB24,
         decoder.width(),
         decoder.height(),
-        ffmpeg::software::scaling::Flags::BILINEAR,
+        scaling::Flags::BILINEAR,
     )?;
     let mut video_frame_count = 0;
     let mut total_output_frames = 0;
