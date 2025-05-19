@@ -8,7 +8,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use sysx::utils::{ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable}, term::{tx, ty, txy}};
+use sysx::utils::{ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable}, term::txy};
 use ffmpeg::software::scaling;
 
 const EAGAIN: i32 = 11;
