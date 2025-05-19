@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use crossterm::{ExecutableCommand, cursor, execute, terminal};
 use rodio::{Decoder, OutputStream, Sink, Source};
+use clap::{Parser, Subcommand};
 use std::{
     fs::{self, File},
     io::{BufReader, Write, stdout},
@@ -9,14 +10,36 @@ use std::{
 };
 use sysx::time::safe_sleep;
 
-/// Player options for ASCII animation
-#[derive(Debug)]
-pub struct PlayerOptions {
-    pub frames_dir: PathBuf,
-    pub fps: f64,
-    pub audio_path: Option<PathBuf>,
-    pub loop_gif: bool,
-    pub sync: bool,
+#[derive(Parser, Debug)]
+pub struct PlayArgs {
+    /// Directory containing ASCII frames (organized in second subdirectories)
+    #[arg(short, long, default_value = "output")]
+    frames_dir: PathBuf,
+
+    /// Playback FPS
+    #[arg(short, long, default_value_t = 30.0)]
+    fps: f64,
+
+    /// Optional path to audio file or video file containing audio track
+    #[arg(
+        short,
+        long,
+        help = "Path to audio file or video file with audio track"
+    )]
+    audio: Option<PathBuf>,
+
+    /// Loop the animation and audio like a GIF
+    #[arg(short = 'g', long = "gif", default_value_t = false)]
+    loop_gif: bool,
+
+    /// Sync audio with animation loop (requires --gif)
+    #[arg(
+        short,
+        long,
+        requires = "loop_gif",
+        help = "Restart audio with each animation loop (requires --gif)"
+    )]
+    sync: bool,
 }
 
 /// Structure for frame path and number
@@ -53,11 +76,11 @@ impl Drop for TerminalGuard {
     }
 }
 
-fn initialize_audio(options: &PlayerOptions) -> Result<(Sink, OutputStream)> {
+fn initialize_audio(options: &PlayArgs) -> Result<(Sink, OutputStream)> {
     let (stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
 
-    if let Some(path) = &options.audio_path {
+    if let Some(path) = &options.audio {
         load_audio_file(&sink, path).unwrap_or_else(|e| eprintln!("Audio loading error: {e}"));
     }
 
@@ -83,7 +106,7 @@ fn render_frame(content: &str) -> Result<()> {
 }
 
 /// Main animation playback function
-pub fn play_animation(options: PlayerOptions) -> Result<()> {
+pub fn play_animation(options: PlayArgs) -> Result<()> {
     if options.fps <= 0.0 {
         return Err(anyhow!("FPS must be positive"));
     }
@@ -117,7 +140,7 @@ pub fn play_animation(options: PlayerOptions) -> Result<()> {
     let playback_loop = || -> Result<()> {
         if options.sync {
             sink.stop();
-            if let Some(path) = &options.audio_path {
+            if let Some(path) = &options.audio {
                 load_audio_file(&sink, path)
                     .unwrap_or_else(|e| eprintln!("Audio reload error: {e}"));
             }
