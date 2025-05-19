@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -7,7 +7,6 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    time::Instant,
 };
 use sysx::utils::ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable};
 
@@ -55,7 +54,6 @@ pub struct ConvertArgs {
     #[arg(short = 'A', long)]
     auto_size: bool,
 }
-
 
 pub fn run_conversion(args: ConvertArgs) -> Result<()> {
     ffmpeg::init().context("Failed to initialize FFmpeg")?;

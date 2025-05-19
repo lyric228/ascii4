@@ -1,21 +1,12 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use ffmpeg_next as ffmpeg;
-use image::{ImageBuffer, Rgb};
-use std::{
-    convert::TryInto,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    time::Instant,
-};
-use sysx::utils::ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable};
+use std::{io::Write, time::Instant};
 
-mod play;
 mod convert;
+mod play;
 
-use play::*;
 use convert::*;
+use play::*;
 
 // TODO: url for audio/video in args
 // TODO: use video (.mp4) for -a/--audio

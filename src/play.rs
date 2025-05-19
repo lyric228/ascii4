@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow};
+use clap::Parser;
 use crossterm::{ExecutableCommand, cursor, execute, terminal};
 use rodio::{Decoder, OutputStream, Sink, Source};
-use clap::{Parser, Subcommand};
 use std::{
     fs::{self, File},
     io::{BufReader, Write, stdout},
