@@ -4,9 +4,13 @@ use std::{io::Write, time::Instant};
 
 mod convert;
 mod play;
+mod types;
 
+use types::*;
 use convert::*;
 use play::*;
+use convert_args::ConvertArgs;
+use play_args::PlayArgs;
 
 // TODO: url for audio/video in args
 // TODO: use video (.mp4) for -a/--audio

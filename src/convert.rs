@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, anyhow};
-use clap::Parser;
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -10,51 +9,11 @@ use std::{
 };
 use sysx::utils::{ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable}, term::txy};
 use ffmpeg::software::scaling;
-
-const EAGAIN: i32 = 11;
-
-struct CleanupGuard(PathBuf);
-
-impl CleanupGuard {
-    pub fn new(path: PathBuf) -> Self {
-        Self(path)
-    }
-}
-
-impl Drop for CleanupGuard {
-    fn drop(&mut self) {
-        if self.0.exists() {
-            let _ = fs::remove_file(&self.0);
-        }
-    }
-}
-
-#[derive(Parser, Debug)]
-pub struct ConvertArgs {
-    /// Input video file path
-    #[arg(short, long)]
-    input: String,
-
-    /// Output directory for ASCII frames
-    #[arg(short, long, default_value = "output")]
-    output_dir: String,
-
-    /// Target FPS for ASCII conversion
-    #[arg(short, long, default_value_t = 15.0)]
-    fps: f64,
-
-    /// Output ASCII art width
-    #[arg(short = 'W', long, default_value_t = 100)]
-    width: usize,
-
-    /// Output ASCII art height
-    #[arg(short = 'H', long, default_value_t = 50)]
-    height: usize,
-
-    /// Automatically set output size based on terminal size if width/height not specified
-    #[arg(short = 'A', long)]
-    auto_size: bool,
-}
+use crate::types::{
+    cleanup_guard::CleanupGuard,
+    convert_args::ConvertArgs,
+    consts::EAGAIN,
+};
 
 pub fn run_conversion(args: ConvertArgs) -> Result<()> {
     ffmpeg::init().context("Failed to initialize FFmpeg")?;

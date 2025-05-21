@@ -1,6 +1,6 @@
 use std::{path::PathBuf, fs};
 
-struct CleanupGuard(PathBuf);
+pub struct CleanupGuard(PathBuf);
 
 impl CleanupGuard {
     pub fn new(path: PathBuf) -> Self {

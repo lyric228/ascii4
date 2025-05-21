@@ -9,72 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 use sysx::time::safe_sleep;
-
-#[derive(Parser, Debug)]
-pub struct PlayArgs {
-    /// Directory containing ASCII frames (organized in second subdirectories)
-    #[arg(short, long, default_value = "output")]
-    frames_dir: PathBuf,
-
-    /// Playback FPS
-    #[arg(short, long, default_value_t = 30.0)]
-    fps: f64,
-
-    /// Optional path to audio file or video file containing audio track
-    #[arg(
-        short,
-        long,
-        help = "Path to audio file or video file with audio track"
-    )]
-    audio: Option<PathBuf>,
-
-    /// Loop the animation and audio like a GIF
-    #[arg(short = 'g', long = "gif", default_value_t = false)]
-    loop_gif: bool,
-
-    /// Sync audio with animation loop (requires --gif)
-    #[arg(
-        short,
-        long,
-        requires = "loop_gif",
-        help = "Restart audio with each animation loop (requires --gif)"
-    )]
-    sync: bool,
-}
-
-/// Structure for frame path and number
-#[derive(Debug)]
-struct FrameInfo {
-    path: PathBuf,
-    number: u64,
-}
-
-/// Structure for second information and its frames
-#[derive(Debug)]
-struct SecondInfo {
-    number: u64,
-    frames: Vec<FrameInfo>,
-}
-
-struct TerminalGuard;
-
-impl TerminalGuard {
-    fn new() -> Self {
-        let mut stdout = stdout();
-        let _ = stdout.execute(terminal::EnterAlternateScreen);
-        let _ = stdout.execute(cursor::Hide);
-        Self
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let mut stdout = stdout();
-        let _ = stdout.execute(cursor::Show);
-        let _ = stdout.execute(terminal::LeaveAlternateScreen);
-        let _ = stdout.flush();
-    }
-}
+use crate::play_args::PlayArgs;
+use crate::terminal_guard::TerminalGuard;
+use crate::info::{FrameInfo, SecondInfo};
 
 fn initialize_audio(options: &PlayArgs) -> Result<(Sink, OutputStream)> {
     let (stream, stream_handle) = OutputStream::try_default()?;
