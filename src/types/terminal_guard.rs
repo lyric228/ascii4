@@ -1,5 +1,5 @@
-use crossterm::{ExecutableCommand, cursor, execute, terminal};
-use std::io::{Stdout, stdout, Write};
+use crossterm::{ExecutableCommand, cursor, terminal};
+use std::io::{Write, stdout};
 
 pub struct TerminalGuard;
 

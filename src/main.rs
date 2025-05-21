@@ -6,11 +6,11 @@ mod convert;
 mod play;
 mod types;
 
-use types::*;
 use convert::*;
-use play::*;
 use convert_args::ConvertArgs;
+use play::*;
 use play_args::PlayArgs;
+use types::*;
 
 // TODO: url for audio/video in args
 // TODO: use video (.mp4) for -a/--audio

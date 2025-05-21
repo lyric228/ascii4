@@ -1,4 +1,6 @@
+use crate::types::{cleanup_guard::CleanupGuard, consts::EAGAIN, convert_args::ConvertArgs};
 use anyhow::{Context, Result, anyhow};
+use ffmpeg::software::scaling;
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -7,12 +9,9 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use sysx::utils::{ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable}, term::txy};
-use ffmpeg::software::scaling;
-use crate::types::{
-    cleanup_guard::CleanupGuard,
-    convert_args::ConvertArgs,
-    consts::EAGAIN,
+use sysx::utils::{
+    ascii::{AsciiArtConfig, CHAR_SET_VERY_DETAILED, image_to_ascii_configurable},
+    term::txy,
 };
 
 pub fn run_conversion(args: ConvertArgs) -> Result<()> {
@@ -69,10 +68,12 @@ pub fn run_conversion(args: ConvertArgs) -> Result<()> {
 
     if args.auto_size {
         if let Some((term_width, term_height)) = txy() {
-            if args.width == 100 { // only if width is not specified (default value)
+            if args.width == 100 {
+                // only if width is not specified (default value)
                 ascii_width = term_width as usize;
             }
-            if args.height == 50 { // only if height is not specified (default value)
+            if args.height == 50 {
+                // only if height is not specified (default value)
                 ascii_height = term_height as usize;
             }
         } else {
@@ -99,8 +100,8 @@ pub fn run_conversion(args: ConvertArgs) -> Result<()> {
                 }
                 Err(e) => {
                     return Err(anyhow!("Failed to send packet to decoder: {}", e));
+                }
             }
-                                    }
 
             let mut decoded_frame = ffmpeg::frame::Video::empty();
             loop {

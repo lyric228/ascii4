@@ -1,6 +1,8 @@
+use crate::info::{FrameInfo, SecondInfo};
+use crate::play_args::PlayArgs;
+use crate::terminal_guard::TerminalGuard;
 use anyhow::{Context, Result, anyhow};
-use clap::Parser;
-use crossterm::{ExecutableCommand, cursor, execute, terminal};
+use crossterm::{cursor, execute, terminal};
 use rodio::{Decoder, OutputStream, Sink, Source};
 use std::{
     fs::{self, File},
@@ -9,9 +11,6 @@ use std::{
     time::{Duration, Instant},
 };
 use sysx::time::safe_sleep;
-use crate::play_args::PlayArgs;
-use crate::terminal_guard::TerminalGuard;
-use crate::info::{FrameInfo, SecondInfo};
 
 fn initialize_audio(options: &PlayArgs) -> Result<(Sink, OutputStream)> {
     let (stream, stream_handle) = OutputStream::try_default()?;
